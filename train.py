@@ -25,7 +25,7 @@ r2=r2_score(y_test,y_pred)
 print("Mean Absolute Error:", f"${mae*100000:.0f}")
 print(f"R2 Score:{r2:.3f}")
 
-joblib.dump(model,"house_price_model.joblib")
+joblib.dump(model,"house_price_model.joblib",compress=3)
 joblib.dump(list(X.columns),"house_features.joblib")
 
 
