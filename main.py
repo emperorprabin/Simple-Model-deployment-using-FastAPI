@@ -1,6 +1,8 @@
+import io
 import joblib
 import pandas as pd
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI,HTTPException, UploadFile,File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel,Field
 
 app=FastAPI()
@@ -62,3 +64,55 @@ def predict(house:House_features):
             detail=f"Prediction failed {e}"
         )
 
+@app.post("/predict-file")
+
+async def predict_file(file: UploadFile= File(...)):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a csv file only"
+        )
+    contents=await file.read()
+
+    df= pd.read_csv(io.BytesIO(contents))
+
+    required_columns=[
+        "MedInc","HouseAge","AveRooms","AveBedrms","Population","AveOccup","Latitude","Longitude"
+    ]
+    missing_columns = [
+        col for col in required_columns
+        if col not in df.columns
+    ]
+
+    if missing_columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"These columns are missing from your file {missing_columns}"
+        )
+
+    if len(df)==0:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file has no data"
+        )
+    try:
+        predictions=model.predict(df[required_columns])
+        df["Predicted columns"]=predictions*100000
+
+        df["Predicted columns"]=df["Predicted columns"].apply(lambda x:f"${x:.0f}")
+
+        output=df.to_csv(index=False)
+
+        return StreamingResponse(
+            io.StringIO(output),
+            media_type="text/csv",
+            headers={
+                "Content-disposition":"Attachment; filename=Prediction.csv"
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed due to {str(e)}"
+        )
